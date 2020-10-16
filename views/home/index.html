@@ -1,0 +1,153 @@
+<html>
+<head>
+    <title>
+        {{ .title}}
+    </title>
+</head>
+<body>
+
+<h1>测试注册</h1>
+<label>device_token</label>
+<input type="text" class="device_token" value='123456789'>
+<br>
+<label>group_id</label>
+<input type="text" class="group_id" value='1'>
+<br>
+<br>
+<button style="color: blue" name="register">注册</button>
+<br>
+
+
+<HR>
+<h1>测试登录与退出登录</h1>
+<label>device_token</label>
+<input type="text" class="device_token_login" value='123456789'>
+<br>
+<label>uid</label>
+<input type="text" class="uid" value='47818'>
+<br>
+<label>group_id</label>
+<input type="text" class="group_id" value='1'>
+<br>
+<br>
+<button style="color: green" name="login">登录</button>&nbsp;&nbsp;
+<button style="color: red" name="logout">退出登录</button>
+
+<hr>
+<br>
+<div style="border-style:dashed;padding: 10px">
+    <h5>结果</h5>
+    <button name="clear">clear</button>
+    <HR>
+    <div class="time">
+
+    </div>
+</div>
+
+
+</body>
+
+<script src="http://91vh.com/js/jquery-2.1.4.min.js"></script>
+<script>
+$(function(){
+    $("button[name='clear']").click(function() {
+        $("div.time").html("");
+    });
+
+    $("button[name='register']").click(function() {
+        register();
+    });
+
+    function register() {
+        device_token = $(".device_token").val();
+        group_id = $('.group_id').val();
+
+        console.log("button 点击:"+device_token+"-"+"-"+group_id);
+
+        var now = new Date();
+
+        $.ajax({
+            type: "POST",
+            url: 'http://{{ .httpUrl }}/device/register',
+            data: {
+                device_token : device_token,
+                group_id : group_id
+            },
+            beforeSend: function(request) {
+                request.setRequestHeader("Channel", "iOS");
+                request.setRequestHeader("appid","1");
+            },
+            contentType: "application/x-www-form-urlencoded",
+            success: function(data) {
+                console.log(data);
+                if (data.code == 1){
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   "+"注册成功！</p>")
+                }else {
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   "+data.msg+"</p>")
+                }
+            }
+        });
+    }
+    $("button[name='login']").click(function() {
+        device_token = $(".device_token_login").val();
+        uid = $('.uid').val();
+        group_id = $('.group_id').val();
+
+        console.log("button 点击:"+device_token+"-"+uid+"-"+group_id);
+        var now = new Date();
+        $.ajax({
+            type: "POST",
+            url: 'http://{{ .httpUrl }}/device/login',
+            data: {
+                device_token : device_token,
+                uid : uid,
+                group_id : group_id
+            },
+            beforeSend: function(request) {
+                request.setRequestHeader("Channel", "iOS");
+                request.setRequestHeader("appid","1");
+            },
+            contentType: "application/x-www-form-urlencoded",
+            success: function(data) {
+                console.log(data);
+                if (data.code == 1){
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   "+"登录成功！</p>")
+                    // addChatWith(msg("小盖","出价啦"))
+                }else {
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   "+data.msg+"</p>")
+                }
+            }
+        });
+    });
+
+    $("button[name='logout']").click(function() {
+        uid = $('.uid').val();
+
+        console.log("button 点击:"+"-"+uid);
+        var now = new Date();
+        $.ajax({
+            type: "POST",
+            url: 'http://{{ .httpUrl }}/device/logout',
+            data: {
+                uid : uid,
+            },
+            beforeSend: function(request) {
+                request.setRequestHeader("Channel", "iOS");
+                request.setRequestHeader("appid","1");
+            },
+            contentType: "application/x-www-form-urlencoded",
+            success: function(data) {
+                console.log(data);
+                if (data.code == 1){
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + "退出登录成功！</p>")
+                    // addChatWith(msg("小盖","出价啦"))
+                }else {
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + data.msg +"</p>")
+                }
+            }
+        });
+    });
+});
+
+</script>
+</html>

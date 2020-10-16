@@ -1,0 +1,22 @@
+app:
+  logFile: log/gin.log # 日志文件位置
+  httpPort: 8080 # http端口
+  webSocketPort: 8089 # webSocket端口
+  rpcPort: 9001 # 分布式部署程序内部通讯端口
+  httpUrl: 127.0.0.1:8080
+  webSocketUrl:  127.0.0.1:8089
+
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  DB: 1
+  poolSize: 30
+  minIdleConns: 30
+
+mysql:
+  host: "127.0.0.1"
+  port: "3306"
+  database: "database_name"
+  username: "root"
+  password: ""
