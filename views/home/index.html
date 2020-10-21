@@ -33,6 +33,23 @@
 <button style="color: green" name="login">登录</button>&nbsp;&nbsp;
 <button style="color: red" name="logout">退出登录</button>
 
+<h1>消息</h1>
+<label>Title</label>
+<input type="text" class="message_title" value="测试title">
+<br>
+<label>Body</label>
+<input type="text" class="message_body" value="测试Body">
+<br>
+<label>uid</label>
+<input type="text" class="uid_message" value='47818'>
+<br>
+<label>group_id</label>
+<input type="text" class="group_id" value='1'>
+<br>
+<br>
+<button style="color: blue" name="push">发送</button>
+<br>
+
 <hr>
 <br>
 <div style="border-style:dashed;padding: 10px">
@@ -140,6 +157,37 @@ $(function(){
                 console.log(data);
                 if (data.code == 1){
                     $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + "退出登录成功！</p>")
+                    // addChatWith(msg("小盖","出价啦"))
+                }else {
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + data.msg +"</p>")
+                }
+            }
+        });
+    });
+
+    $("button[name='push']").click(function() {
+        uid = $('.uid').val();
+
+        console.log("button 点击:"+"-"+uid + $('.message_title').val() + $('.message_body').val());
+        var now = new Date();
+        $.ajax({
+            type: "POST",
+            url: 'http://{{ .httpUrl }}/push/message',
+            data: {
+                uid : uid,
+                title : $('.message_title').val(),
+                desc : $('.message_body').val(),
+                is_show_notify : 1,
+            },
+            beforeSend: function(request) {
+                request.setRequestHeader("Channel", "mi");
+                request.setRequestHeader("AppId","2882303761517900020");
+            },
+            contentType: "application/x-www-form-urlencoded",
+            success: function(data) {
+                console.log(data);
+                if (data.code == 1){
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + "发送成功！</p>")
                     // addChatWith(msg("小盖","出价啦"))
                 }else {
                     $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + data.msg +"</p>")

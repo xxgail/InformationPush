@@ -20,3 +20,7 @@ mysql:
   database: "database_name"
   username: "root"
   password: ""
+
+mi:
+  appSecret: ""
+  restrictedPackageName: ""
