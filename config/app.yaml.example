@@ -24,3 +24,14 @@ mysql:
 mi:
   appSecret: ""
   restrictedPackageName: ""
+
+hw:
+  clientSecret: ""
+
+test:
+  token:
+    mi: ""
+    hw: ""
+  appId:
+    mi: ""
+    hw: ""

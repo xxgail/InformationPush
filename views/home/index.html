@@ -7,8 +7,20 @@
 <body>
 
 <h1>测试注册</h1>
+<label>channel</label>
+<select class="channel">
+    <option value = "ios">iOS</option>
+    <option value = "hw">华为</option>
+    <option value = "mi">小米</option>
+    <option value = "mz">魅族</option>
+    <option value = "op">OPPO</option>
+</select>
+<br>
 <label>device_token</label>
-<input type="text" class="device_token" value='123456789'>
+<input style="width: 500px" type="text" class="device_token" value='123456789'>
+<br>
+<label>appId</label>
+<input style="width: 500px" type="text" class="appId" value='2882303761517900020'>
 <br>
 <label>group_id</label>
 <input type="text" class="group_id" value='1'>
@@ -20,14 +32,8 @@
 
 <HR>
 <h1>测试登录与退出登录</h1>
-<label>device_token</label>
-<input type="text" class="device_token_login" value='123456789'>
-<br>
 <label>uid</label>
 <input type="text" class="uid" value='47818'>
-<br>
-<label>group_id</label>
-<input type="text" class="group_id" value='1'>
 <br>
 <br>
 <button style="color: green" name="login">登录</button>&nbsp;&nbsp;
@@ -39,12 +45,6 @@
 <br>
 <label>Body</label>
 <input type="text" class="message_body" value="测试Body">
-<br>
-<label>uid</label>
-<input type="text" class="uid_message" value='47818'>
-<br>
-<label>group_id</label>
-<input type="text" class="group_id" value='1'>
 <br>
 <br>
 <button style="color: blue" name="push">发送</button>
@@ -61,12 +61,26 @@
     </div>
 </div>
 
-
-</body>
-
 <script src="http://91vh.com/js/jquery-2.1.4.min.js"></script>
 <script>
 $(function(){
+    $('.channel').click(function (){
+        var c = $('.channel').val();
+        switch (c) {
+            case "mi":
+                $('.device_token').val({{ .miToken }});
+                $('.appId').val({{ .miAppId }});
+                break;
+            case "hw":
+                $('.device_token').val({{ .hwToken }});
+                $('.appId').val({{ .hwAppId }});
+                break;
+            case "ios":
+                $('.device_token').val({{ .iosToken }});
+                $('.appId').val({{ .iosAppId }});
+                break;
+        }
+    });
     $("button[name='clear']").click(function() {
         $("div.time").html("");
     });
@@ -78,6 +92,8 @@ $(function(){
     function register() {
         device_token = $(".device_token").val();
         group_id = $('.group_id').val();
+        channel = $('.channel').val();
+        appId = $('.appId').val();
 
         console.log("button 点击:"+device_token+"-"+"-"+group_id);
 
@@ -91,8 +107,8 @@ $(function(){
                 group_id : group_id
             },
             beforeSend: function(request) {
-                request.setRequestHeader("Channel", "iOS");
-                request.setRequestHeader("appid","1");
+                request.setRequestHeader("Channel", channel);
+                request.setRequestHeader("AppId",appId);
             },
             contentType: "application/x-www-form-urlencoded",
             success: function(data) {
@@ -106,9 +122,11 @@ $(function(){
         });
     }
     $("button[name='login']").click(function() {
-        device_token = $(".device_token_login").val();
         uid = $('.uid').val();
+        device_token = $(".device_token").val();
         group_id = $('.group_id').val();
+        channel = $('.channel').val();
+        appId = $('.appId').val();
 
         console.log("button 点击:"+device_token+"-"+uid+"-"+group_id);
         var now = new Date();
@@ -121,8 +139,8 @@ $(function(){
                 group_id : group_id
             },
             beforeSend: function(request) {
-                request.setRequestHeader("Channel", "iOS");
-                request.setRequestHeader("appid","1");
+                request.setRequestHeader("Channel", channel);
+                request.setRequestHeader("AppId",appId);
             },
             contentType: "application/x-www-form-urlencoded",
             success: function(data) {
@@ -139,6 +157,10 @@ $(function(){
 
     $("button[name='logout']").click(function() {
         uid = $('.uid').val();
+        device_token = $(".device_token").val();
+        group_id = $('.group_id').val();
+        channel = $('.channel').val();
+        appId = $('.appId').val();
 
         console.log("button 点击:"+"-"+uid);
         var now = new Date();
@@ -149,8 +171,8 @@ $(function(){
                 uid : uid,
             },
             beforeSend: function(request) {
-                request.setRequestHeader("Channel", "iOS");
-                request.setRequestHeader("appid","1");
+                request.setRequestHeader("Channel", channel);
+                request.setRequestHeader("AppId",appId);
             },
             contentType: "application/x-www-form-urlencoded",
             success: function(data) {
@@ -167,6 +189,10 @@ $(function(){
 
     $("button[name='push']").click(function() {
         uid = $('.uid').val();
+        device_token = $(".device_token").val();
+        group_id = $('.group_id').val();
+        channel = $('.channel').val();
+        appId = $('.appId').val();
 
         console.log("button 点击:"+"-"+uid + $('.message_title').val() + $('.message_body').val());
         var now = new Date();
@@ -180,8 +206,8 @@ $(function(){
                 is_show_notify : 1,
             },
             beforeSend: function(request) {
-                request.setRequestHeader("Channel", "mi");
-                request.setRequestHeader("AppId","2882303761517900020");
+                request.setRequestHeader("Channel", channel);
+                request.setRequestHeader("AppId",appId);
             },
             contentType: "application/x-www-form-urlencoded",
             success: function(data) {
@@ -198,4 +224,5 @@ $(function(){
 });
 
 </script>
+</body>
 </html>

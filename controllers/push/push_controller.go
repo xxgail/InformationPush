@@ -9,7 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/spf13/viper"
+	"github.com/xxgail/HWPushSDK"
 	"github.com/xxgail/XMPushSDK"
+	"github.com/xxgail/iOSPushSDK"
+	"log"
 	"strconv"
 )
 
@@ -56,20 +59,25 @@ func Message(c *gin.Context) {
 	regIds := []string{DeviceToken}
 
 	var code int
+	var payload = &Payload{
+		PushTitle:    param.Title,
+		PushBody:     param.Desc,
+		IsShowNotify: strconv.Itoa(param.IsShowNotify),
+		Ext:          "",
+	}
 	switch channel {
 	case "mi":
-		var payload = &Payload{
-			PushTitle:    param.Title,
-			PushBody:     param.Desc,
-			IsShowNotify: strconv.Itoa(param.IsShowNotify),
-			Ext:          "",
-		}
 		if len(regIds) > 1 {
 			code = miGroupPush(regIds, payload, appId)
 		} else {
 			code = miSinglePush(DeviceToken, payload, appId)
 		}
 		break
+	case "hw":
+		code = hwPush(regIds, payload, appId)
+		break
+	case "ios":
+		code = iOSPush(DeviceToken, payload, appId)
 	}
 	if code == 1 {
 		// 定义接口返回data
@@ -99,10 +107,11 @@ func miGroupPush(regIds []string, payload *Payload, appId string) int {
 	var message = XMPushSDK.InitMessage(payload.PushTitle, payload.PushBody, restrictedPackageName, string(payloadStr), passThrough)
 
 	result, err := XMPushSDK.SendRegIds(appSecret, message, regIds)
+	fmt.Println(result)
 	if err != nil {
 		fmt.Println("群发推送报错：", err)
 	}
-	if result != nil && result.Code != 0 {
+	if result != nil && result.Code != XMPushSDK.Success {
 		fmt.Println("群发推送失败，失败原因：", result.Description)
 		return 0
 	}
@@ -121,11 +130,62 @@ func miSinglePush(regId string, payload *Payload, appId string) int {
 	var message = XMPushSDK.InitMessage(payload.PushTitle, payload.PushBody, restrictedPackageName, string(payloadStr), passThrough)
 
 	result, err := XMPushSDK.SendToOneRegId(appSecret, message, regId)
+	fmt.Println(result)
 	if err != nil {
 		fmt.Println("群发推送报错：", err)
 	}
-	if result != nil && result.Code != 0 {
+	if result != nil && result.Code != XMPushSDK.Success {
 		fmt.Println("群发推送失败，失败原因：", result.Description)
+		return 0
+	}
+	return 1
+}
+
+func hwPush(tokens []string, payload *Payload, appId string) int {
+	clientSecret := viper.GetString("hw.clientSecret")
+	//restrictedPackageName := viper.GetString("hw.restrictedPackageName")
+	//payloadStr, _ := json.Marshal(payload)
+	//是否透传
+	passThrough := "1"
+	if payload.IsShowNotify == "1" {
+		passThrough = "0" //通知栏消息
+	}
+	var message = HWPushSDK.InitMessage(payload.PushTitle, payload.PushBody, passThrough, tokens)
+	fmt.Println("message:----", message)
+	result, err := HWPushSDK.MessagesSend(message, appId, clientSecret)
+	fmt.Println(result)
+	if err != nil {
+		fmt.Println("群发推送报错：", err)
+	}
+	if result != nil && result.Code != HWPushSDK.Success {
+		fmt.Println("群发推送失败，失败原因：", result.Msg)
+		return 0
+	}
+	return 1
+}
+
+func iOSPush(regId string, payload *Payload, appId string) int {
+	keyId := viper.GetString("ios.keyId")
+	teamId := viper.GetString("ios.teamId")
+	fmt.Println(keyId, teamId)
+	//是否透传
+	passThrough := "1"
+	if payload.IsShowNotify == "1" {
+		passThrough = "0" //通知栏消息
+	}
+	var message = iOSPushSDK.InitMessage(payload.PushTitle, payload.PushBody, passThrough)
+	authToken, err := iOSPushSDK.GetAuthToken("./config/iosP8/AuthKey_WFQP4NTDHQ.p8", keyId, teamId)
+	if err != nil {
+		log.Panicln(err)
+	}
+	fmt.Println("aaaaaa:", authToken)
+	result, err := iOSPushSDK.MessagesSend(message, regId, authToken)
+	fmt.Println(result)
+	if err != nil {
+		fmt.Println("群发推送报错：", err)
+	}
+	if result != nil && result.Status != iOSPushSDK.Success {
+		fmt.Println("群发推送失败，失败原因：")
 		return 0
 	}
 	return 1

@@ -50,7 +50,7 @@ func Register(c *gin.Context) {
 
 	channel := c.Request.Header.Get("Channel")
 	deviceToken := initRegisterParam.DeviceToken
-	appId := c.Request.Header.Get("appid")
+	appId := c.Request.Header.Get("AppId")
 	groupId := initRegisterParam.GroupId
 
 	var device Device
@@ -127,7 +127,7 @@ func Login(c *gin.Context) {
 
 	channel := c.Request.Header.Get("Channel")
 	deviceToken := initRegisterParam.DeviceToken
-	appId := c.Request.Header.Get("appid")
+	appId := c.Request.Header.Get("AppId")
 	groupId := initRegisterParam.GroupId
 	uid := initRegisterParam.Uid
 	currentTime := time.Now()
