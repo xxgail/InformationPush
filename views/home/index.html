@@ -66,20 +66,20 @@
 $(function(){
     $('.channel').click(function (){
         var c = $('.channel').val();
-        switch (c) {
-            case "mi":
-                $('.device_token').val({{ .miToken }});
-                $('.appId').val({{ .miAppId }});
-                break;
-            case "hw":
-                $('.device_token').val({{ .hwToken }});
-                $('.appId').val({{ .hwAppId }});
-                break;
-            case "ios":
-                $('.device_token').val({{ .iosToken }});
-                $('.appId').val({{ .iosAppId }});
-                break;
-        }
+        $.ajax({
+            type: "GET",
+            url: 'http://{{ .httpUrl }}/home/getAppId/'+c,
+            data: {
+            },
+            contentType: "application/x-www-form-urlencoded",
+            success: function(data) {
+                console.log(data);
+                if (data.code == 1){
+                    $('.device_token').val(data.data.token);
+                    $('.appId').val(data.data.appId);
+                }
+            }
+        });
     });
     $("button[name='clear']").click(function() {
         $("div.time").html("");

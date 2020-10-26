@@ -20,6 +20,7 @@ func Init(router *gin.Engine) {
 	homeRouter := router.Group("/home")
 	{
 		homeRouter.GET("/index", home.Index)
+		homeRouter.GET("/getAppId/:channel", home.GetAppId)
 	}
 
 	pushRouter := router.Group("/push")

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/spf13/viper"
 	"github.com/xxgail/HWPushSDK"
+	"github.com/xxgail/MZPushSDK"
 	"github.com/xxgail/XMPushSDK"
 	"github.com/xxgail/iOSPushSDK"
 	"log"
@@ -67,17 +68,17 @@ func Message(c *gin.Context) {
 	}
 	switch channel {
 	case "mi":
-		if len(regIds) > 1 {
-			code = miGroupPush(regIds, payload, appId)
-		} else {
-			code = miSinglePush(DeviceToken, payload, appId)
-		}
+		code = miGroupPush(regIds, payload, appId)
 		break
 	case "hw":
 		code = hwPush(regIds, payload, appId)
 		break
 	case "ios":
 		code = iOSPush(DeviceToken, payload, appId)
+		break
+	case "mz":
+		code = mzPush(regIds, payload, appId)
+		break
 	}
 	if code == 1 {
 		// 定义接口返回data
@@ -167,6 +168,7 @@ func hwPush(tokens []string, payload *Payload, appId string) int {
 func iOSPush(regId string, payload *Payload, appId string) int {
 	keyId := viper.GetString("ios.keyId")
 	teamId := viper.GetString("ios.teamId")
+	bundleID := viper.GetString("ios.bundleID")
 	fmt.Println(keyId, teamId)
 	//是否透传
 	passThrough := "1"
@@ -174,18 +176,35 @@ func iOSPush(regId string, payload *Payload, appId string) int {
 		passThrough = "0" //通知栏消息
 	}
 	var message = iOSPushSDK.InitMessage(payload.PushTitle, payload.PushBody, passThrough)
-	authToken, err := iOSPushSDK.GetAuthToken("./config/iosP8/AuthKey_WFQP4NTDHQ.p8", keyId, teamId)
+	authToken, err := iOSPushSDK.GetAuthToken("./config/iosP8/AuthKey_R66FMTN5B2.p8", keyId, teamId)
 	if err != nil {
 		log.Panicln(err)
 	}
 	fmt.Println("aaaaaa:", authToken)
-	result, err := iOSPushSDK.MessagesSend(message, regId, authToken)
+	result, err := iOSPushSDK.MessagesSend(message, regId, authToken, bundleID)
 	fmt.Println(result)
 	if err != nil {
 		fmt.Println("群发推送报错：", err)
 	}
 	if result != nil && result.Status != iOSPushSDK.Success {
-		fmt.Println("群发推送失败，失败原因：")
+		fmt.Println("群发推送失败，失败原因：", result.Reason)
+		return 0
+	}
+	return 1
+}
+
+func mzPush(regId []string, payload *Payload, appId string) int {
+	appSecret := viper.GetString("mz.appSecret")
+	fmt.Println(appId, appSecret)
+
+	var message = MZPushSDK.InitMessage(payload.PushTitle, payload.PushBody)
+	result, err := MZPushSDK.MessageSend(message, appId, regId, appSecret)
+	fmt.Println(result)
+	if err != nil {
+		fmt.Println("群发推送报错：", err)
+	}
+	if result != nil && result.Code != MZPushSDK.Success {
+		fmt.Println("群发推送失败，失败原因：", result.Message)
 		return 0
 	}
 	return 1
