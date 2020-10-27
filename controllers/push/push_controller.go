@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/xxgail/HWPushSDK"
 	"github.com/xxgail/MZPushSDK"
+	"github.com/xxgail/OPPOPushSDK"
 	"github.com/xxgail/XMPushSDK"
 	"github.com/xxgail/iOSPushSDK"
 	"log"
@@ -78,6 +79,9 @@ func Message(c *gin.Context) {
 		break
 	case "mz":
 		code = mzPush(regIds, payload, appId)
+		break
+	case "oppo":
+		code = oppoPush(regIds, payload, appId)
 		break
 	}
 	if code == 1 {
@@ -204,6 +208,28 @@ func mzPush(regId []string, payload *Payload, appId string) int {
 		fmt.Println("群发推送报错：", err)
 	}
 	if result != nil && result.Code != MZPushSDK.Success {
+		fmt.Println("群发推送失败，失败原因：", result.Message)
+		return 0
+	}
+	return 1
+}
+
+func oppoPush(regId []string, payload *Payload, appId string) int {
+	appKey := viper.GetString("oppo.appKey")
+	masterSecret := viper.GetString("oppo.masterSecret")
+	fmt.Println(appKey, masterSecret)
+
+	var message = OPPOPushSDK.InitMessage(payload.PushTitle, payload.PushBody, regId)
+	authToken, err := OPPOPushSDK.GetAuthToken(appKey, masterSecret)
+	if err != nil {
+		log.Panicln(err)
+	}
+	result, err := OPPOPushSDK.MessageSend(message, authToken)
+	fmt.Println(result)
+	if err != nil {
+		fmt.Println("群发推送报错：", err)
+	}
+	if result != nil && result.Code != OPPOPushSDK.Success {
 		fmt.Println("群发推送失败，失败原因：", result.Message)
 		return 0
 	}
