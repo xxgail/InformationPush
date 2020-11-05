@@ -1,9 +1,11 @@
 package redislib
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/go-redis/redis"
+	//"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"
 )
 
@@ -20,7 +22,7 @@ func InitClient() {
 		MinIdleConns: viper.GetInt("redis.minIdleConns"),
 	})
 
-	pong, err := client.Ping().Result()
+	pong, err := client.Ping(context.Background()).Result()
 	fmt.Println("初始化Redis....", pong, err)
 }
 
