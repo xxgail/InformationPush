@@ -6,12 +6,14 @@ import (
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-redis/redis"
 	"github.com/mitchellh/mapstructure"
 	"github.com/xxgail/PushSDK"
+	"reflect"
+	"time"
 )
 
 type MessageParam struct {
@@ -49,11 +51,13 @@ func Message(c *gin.Context) {
 	appId := c.Request.Header.Get("AppId")
 	uid := param.Uid
 
+	// 消息体
 	message := PushSDK.MessageBody{
 		Title: param.Title,
 		Desc:  param.Desc,
 	}
 
+	// 单个查询用户
 	//var DeviceToken string
 	//mysqlClient := mysqllib.GetMysqlConn()
 	//query := "SELECT device_token FROM device WHERE channel = '" + channel + "' AND uid = '" + uid + "' AND app_id = '" + appId + "'"
@@ -63,6 +67,7 @@ func Message(c *gin.Context) {
 	//	fmt.Println("PushMessage 查询数据库单条用户信息 出错：", err)
 	//}
 
+	// 多个查询，获取要推送的device_token
 	var pushIds []string
 	mysqlClient := mysqllib.GetMysqlConn()
 	query := "SELECT device_token FROM device WHERE channel = '" + channel + "' AND uid = '" + uid + "' AND app_id = '" + appId + "'"
@@ -80,56 +85,65 @@ func Message(c *gin.Context) {
 		}
 		pushIds = append(pushIds, pushId)
 	}
-
 	if len(pushIds) == 0 {
 		controllers.Response(c, common.HTTPError, "No pushId", data)
 		return
 	}
 
+	// 根据appid获取平台参数（1,缓存redis（hash结构）、2,mysql
 	var plat PushSDK.PlatformParam
 	appIdKey := "AppIdKey:" + common.SMD5("AppId", appId)
-	fmt.Println("appIdKey ", appIdKey)
 	redisClient := redislib.GetClient()
 	platRedis, err := redisClient.HGetAll(ctx, appIdKey).Result()
 	if err != nil {
 		fmt.Println("err", err)
 	} else if len(platRedis) == 0 {
-		fmt.Println("first in redis info")
+		fmt.Println("platform param first in redis info")
 		query1 := "SELECT hw_appId, hw_clientSecret, iOS_keyId, iOS_teamId, iOS_bundleId, iOS_authTokenPath, mi_appSecret, mi_restrictedPackageName, mz_appId, mz_appSecret, oppo_appKey, oppo_masterSecret FROM platform_param WHERE app_id = '" + "1" + "'"
-		fmt.Println(query1)
 		err = mysqlClient.QueryRow(query1).Scan(&plat.HWAppId, &plat.HWClientSecret, &plat.IOSKeyId, &plat.IOSTeamId, &plat.IOSBundleId, &plat.IOSAuthTokenPath, &plat.MIAppSecret, &plat.MIRestrictedPackageName, &plat.MZAppId, &plat.MZAppSecret, &plat.OPPOAppKey, &plat.OPPOMasterSecret)
 		if err != nil {
 			fmt.Println("Platform 参数 查询数据库单条用户信息 出错：", err)
+			controllers.Response(c, common.HTTPError, "no platform parma", data)
+			return
 		}
-		platStr, err := json.Marshal(plat)
-		if err != nil {
-
-		}
-		fmt.Println("platStr", string(platStr))
-		var platMap map[string]string
-		err = json.Unmarshal(platStr, &platMap)
-		if err != nil {
-
-		}
-		fmt.Println("platMap", platMap)
-		for k, v := range platMap {
-			redisClient.HSet(ctx, appIdKey, k, v)
+		// 遍历结构体，存入redis
+		t := reflect.TypeOf(plat)
+		v := reflect.ValueOf(plat)
+		for k := 0; k < t.NumField(); k++ {
+			redisClient.HSet(ctx, appIdKey, fmt.Sprint(t.Field(k).Name), fmt.Sprint(v.Field(k).Interface()))
 		}
 	} else {
-		fmt.Println("get plat from redis")
+		fmt.Println("get platform param from redis", platRedis, reflect.TypeOf(platRedis))
+		// map 转 struct
 		if err = mapstructure.Decode(platRedis, &plat); err != nil {
 			fmt.Println(err)
 		}
 	}
+
+	// 获取iOS-authtoken。不能频繁刷新，间隔时间为20分钟
+	iOSAuthTokenKey := "iOSAuthTokenKey:" + plat.IOSKeyId + plat.IOSTeamId
+	iOSAuthRedis, err := redisClient.Get(ctx, iOSAuthTokenKey).Result()
+	if err == redis.Nil || iOSAuthRedis == "" {
+		fmt.Println("ios-authToken first in redis info")
+		authToken, err := PushSDK.GetAuthTokenIOS(plat.IOSAuthTokenPath, plat.IOSKeyId, plat.IOSTeamId)
+		if err != nil {
+			fmt.Println(err)
+		}
+		redisClient.Set(ctx, iOSAuthTokenKey, authToken, 20*time.Minute)
+		plat.IOSAuthToken = authToken
+	} else {
+		plat.IOSAuthToken = iOSAuthRedis
+	}
+
+	// 发送消息
 	send := PushSDK.InitSend(message, channel, pushIds, plat)
-	fmt.Println(send)
 	code, reason := send.SendMessage()
 
 	if code == 1 {
 		controllers.Response(c, common.HTTPOK, "发送成功！", data)
 	} else {
 		data["reason"] = reason
-		controllers.Response(c, common.HTTPError, "api错误", data)
+		controllers.Response(c, common.HTTPError, reason, data)
 	}
 }
 
