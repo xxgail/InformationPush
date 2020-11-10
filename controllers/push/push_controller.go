@@ -13,6 +13,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/xxgail/PushSDK"
 	"reflect"
+	"strconv"
 	"time"
 )
 
@@ -52,10 +53,13 @@ func Message(c *gin.Context) {
 	uid := param.Uid
 
 	// 消息体
-	message := PushSDK.MessageBody{
-		Title: param.Title,
-		Desc:  param.Desc,
-	}
+	send := PushSDK.NewSend()
+	send.SetChannel(channel)
+	send.SetTitle(param.Title).SetContent(param.Desc)
+
+	apns := common.SMD5(strconv.FormatInt(time.Now().Unix(), 10), "")
+	apnsId := apns[:8] + "-" + apns[8:12] + "-" + apns[12:16] + "-" + apns[16:20] + "-" + apns[20:]
+	send.SetApnsId(apnsId)
 
 	// 单个查询用户
 	//var DeviceToken string
@@ -120,151 +124,68 @@ func Message(c *gin.Context) {
 		}
 	}
 
-	// 获取iOS-authtoken。不能频繁刷新，间隔时间为20分钟
-	iOSAuthTokenKey := "iOSAuthTokenKey:" + plat.IOSKeyId + plat.IOSTeamId
-	iOSAuthRedis, err := redisClient.Get(ctx, iOSAuthTokenKey).Result()
-	if err == redis.Nil || iOSAuthRedis == "" {
-		fmt.Println("ios-authToken first in redis info")
-		authToken, err := PushSDK.GetAuthTokenIOS(plat.IOSAuthTokenPath, plat.IOSKeyId, plat.IOSTeamId)
-		if err != nil {
-			fmt.Println(err)
+	switch channel {
+	case "hw":
+		send.SetHWAppId(plat.HWAppId).SetHWClientSecret(plat.HWClientSecret)
+		break
+	case "ios":
+		// 获取iOS-authtoken 不能频繁刷新，间隔时间为20分钟
+		iOSAuthTokenKey := "iOSAuthTokenKey:" + plat.IOSKeyId + plat.IOSTeamId
+		iOSAuthRedis, err := redisClient.Get(ctx, iOSAuthTokenKey).Result()
+		if err == redis.Nil || iOSAuthRedis == "" {
+			fmt.Println("ios-authToken first in redis info")
+			authToken, err := PushSDK.GetAuthTokenIOS(plat.IOSAuthTokenPath, plat.IOSKeyId, plat.IOSTeamId)
+			if err != nil {
+				fmt.Println(err)
+			}
+			redisClient.Set(ctx, iOSAuthTokenKey, authToken, 20*time.Minute)
+			send.SetIOSAuthToken(authToken)
+			plat.IOSAuthToken = authToken
+		} else {
+			send.SetIOSAuthToken(iOSAuthRedis)
+			plat.IOSAuthToken = iOSAuthRedis
 		}
-		redisClient.Set(ctx, iOSAuthTokenKey, authToken, 20*time.Minute)
-		plat.IOSAuthToken = authToken
-	} else {
-		plat.IOSAuthToken = iOSAuthRedis
+		send.SetIOSBundleId(plat.IOSBundleId)
+		break
+	case "mi":
+		send.SetMIAppSecret(plat.MIAppSecret).SetMIRestrictedPackageName(plat.MIRestrictedPackageName)
+		break
+	case "mz":
+		send.SetMZAppId(plat.MZAppId).SetMZAppSecret(plat.MZAppSecret)
+		break
+	case "oppo":
+		send.SetOPPOAppKey(plat.OPPOAppKey).SetOPPOMasterSecret(plat.OPPOMasterSecret)
+		break
+	case "vivo":
+		// 获取vivo-authtoken 不能频繁刷新，间隔时间为60分钟
+		vAuthTokenKey := "vAuthTokenKey:" + plat.VIAppID + plat.VIAppKey
+		vAuthRedis, err := redisClient.Get(ctx, vAuthTokenKey).Result()
+		if err == redis.Nil || vAuthRedis == "" {
+			fmt.Println("v-authToken first in redis info")
+			vAuthToken := PushSDK.GetAuthTokenV(plat.VIAppID, plat.VIAppKey, plat.VIAppSecret)
+			if err != nil {
+				fmt.Println(err)
+			}
+			redisClient.Set(ctx, vAuthTokenKey, vAuthToken, 60*time.Minute)
+			send.SetVIAuthToken(vAuthToken)
+			plat.VIAuthToken = vAuthToken
+		} else {
+			send.SetVIAuthToken(vAuthRedis)
+			plat.VIAuthToken = vAuthRedis
+		}
+		break
 	}
 
 	// 发送消息
-	send := PushSDK.InitSend(message, channel, pushIds, plat)
-	code, reason := send.SendMessage()
-
-	if code == 1 {
-		controllers.Response(c, common.HTTPOK, "发送成功！", data)
+	fmt.Println(send)
+	response, err := send.SendMessage()
+	if err != nil {
+		controllers.Response(c, common.HTTPError, "err!", data)
 	} else {
-		data["reason"] = reason
-		controllers.Response(c, common.HTTPError, reason, data)
+		if response.Code == PushSDK.SendSuccess {
+			controllers.Response(c, common.HTTPOK, "发送成功！", data)
+		} else {
+			controllers.Response(c, common.HTTPError, response.Reason, data)
+		}
 	}
 }
-
-//消息payload，根据业务自定义
-//type Payload struct {
-//	PushTitle    string `json:"push_title"`
-//	PushBody     string `json:"push_body"`
-//	IsShowNotify string `json:"is_show_notify"`
-//	Ext          string `json:"ext"`
-//}
-
-//func miGroupPush(regIds []string, payload *Payload, appId string) int {
-//	appSecret := viper.GetString("mi.appSecret")
-//	restrictedPackageName := viper.GetString("mi.restrictedPackageName")
-//	payloadStr, _ := json.Marshal(payload)
-//	//是否透传
-//	passThrough := "1"
-//	if payload.IsShowNotify == "1" {
-//		passThrough = "0" //通知栏消息
-//	}
-//
-//	var message = XMPushSDK.InitMessage(payload.PushTitle, payload.PushBody, restrictedPackageName, string(payloadStr), passThrough)
-//
-//	result, err := XMPushSDK.MessageSend(appSecret, message, regIds)
-//	fmt.Println(result)
-//	if err != nil {
-//		fmt.Println("群发推送报错：", err)
-//	}
-//	if result != nil && result.Code != XMPushSDK.Success {
-//		fmt.Println("群发推送失败，失败原因：", result.Description)
-//		return 0
-//	}
-//	return 1
-//}
-//
-//func hwPush(tokens []string, payload *Payload, appId string) int {
-//	clientSecret := viper.GetString("hw.clientSecret")
-//	//restrictedPackageName := viper.GetString("hw.restrictedPackageName")
-//	//payloadStr, _ := json.Marshal(payload)
-//	//是否透传
-//	passThrough := "1"
-//	if payload.IsShowNotify == "1" {
-//		passThrough = "0" //通知栏消息
-//	}
-//	var message = HWPushSDK.InitMessage(payload.PushTitle, payload.PushBody, passThrough, tokens)
-//	fmt.Println("message:----", message)
-//	result, err := HWPushSDK.MessagesSend(message, appId, clientSecret)
-//	fmt.Println(result)
-//	if err != nil {
-//		fmt.Println("群发推送报错：", err)
-//	}
-//	if result != nil && result.Code != HWPushSDK.Success {
-//		fmt.Println("群发推送失败，失败原因：", result.Msg)
-//		return 0
-//	}
-//	return 1
-//}
-//
-//func iOSPush(regId string, payload *Payload, appId string) int {
-//	keyId := viper.GetString("ios.keyId")
-//	teamId := viper.GetString("ios.teamId")
-//	bundleID := viper.GetString("ios.bundleID")
-//	fmt.Println(keyId, teamId)
-//	//是否透传
-//	passThrough := "1"
-//	if payload.IsShowNotify == "1" {
-//		passThrough = "0" //通知栏消息
-//	}
-//	var message = iOSPushSDK.InitMessage(payload.PushTitle, payload.PushBody, passThrough)
-//	authToken, err := iOSPushSDK.GetAuthToken("./config/iosP8/AuthKey_R66FMTN5B2.p8", keyId, teamId)
-//	if err != nil {
-//		log.Panicln(err)
-//	}
-//	fmt.Println("aaaaaa:", authToken)
-//	result, err := iOSPushSDK.MessagesSend(message, regId, authToken, bundleID)
-//	fmt.Println(result)
-//	if err != nil {
-//		fmt.Println("群发推送报错：", err)
-//	}
-//	if result != nil && result.Status != iOSPushSDK.Success {
-//		fmt.Println("群发推送失败，失败原因：", result.Reason)
-//		return 0
-//	}
-//	return 1
-//}
-//
-//func mzPush(regId []string, payload *Payload, appId string) int {
-//	appSecret := viper.GetString("mz.appSecret")
-//	fmt.Println(appId, appSecret)
-//
-//	var message = MZPushSDK.InitMessage(payload.PushTitle, payload.PushBody)
-//	result, err := MZPushSDK.MessageSend(message, appId, regId, appSecret)
-//	fmt.Println(result)
-//	if err != nil {
-//		fmt.Println("群发推送报错：", err)
-//	}
-//	if result != nil && result.Code != MZPushSDK.Success {
-//		fmt.Println("群发推送失败，失败原因：", result.Message)
-//		return 0
-//	}
-//	return 1
-//}
-//
-//func oppoPush(regId []string, payload *Payload, appId string) int {
-//	appKey := viper.GetString("oppo.appKey")
-//	masterSecret := viper.GetString("oppo.masterSecret")
-//	fmt.Println(appKey, masterSecret)
-//
-//	var message = OPPOPushSDK.InitMessage(payload.PushTitle, payload.PushBody, regId)
-//	authToken, err := OPPOPushSDK.GetAuthToken(appKey, masterSecret)
-//	if err != nil {
-//		log.Panicln(err)
-//	}
-//	result, err := OPPOPushSDK.MessageSend(message, authToken)
-//	fmt.Println(result)
-//	if err != nil {
-//		fmt.Println("群发推送报错：", err)
-//	}
-//	if result != nil && result.Code != OPPOPushSDK.Success {
-//		fmt.Println("群发推送失败，失败原因：", result.Message)
-//		return 0
-//	}
-//	return 1
-//}
