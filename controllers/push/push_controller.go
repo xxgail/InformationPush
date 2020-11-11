@@ -6,11 +6,10 @@ import (
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/go-redis/redis"
-	"github.com/mitchellh/mapstructure"
 	"github.com/xxgail/PushSDK"
 	"reflect"
 	"strconv"
@@ -93,89 +92,64 @@ func Message(c *gin.Context) {
 		controllers.Response(c, common.HTTPError, "No pushId", data)
 		return
 	}
+	send.SetPushId(pushIds)
 
-	// 根据appid获取平台参数（1,缓存redis（hash结构）、2,mysql
-	var plat PushSDK.PlatformParam
-	appIdKey := "AppIdKey:" + common.SMD5("AppId", appId)
+	// 直接传入配置json
+	var plat string
+	appIdKey := "AppIdKey:" + channel + ":" + common.SMD5("AppId", appId)
 	redisClient := redislib.GetClient()
 	platRedis, err := redisClient.HGetAll(ctx, appIdKey).Result()
 	if err != nil {
 		fmt.Println("err", err)
 	} else if len(platRedis) == 0 {
-		fmt.Println("platform param first in redis info")
-		query1 := "SELECT hw_appId, hw_clientSecret, iOS_keyId, iOS_teamId, iOS_bundleId, iOS_authTokenPath, mi_appSecret, mi_restrictedPackageName, mz_appId, mz_appSecret, oppo_appKey, oppo_masterSecret FROM platform_param WHERE app_id = '" + "1" + "'"
-		err = mysqlClient.QueryRow(query1).Scan(&plat.HWAppId, &plat.HWClientSecret, &plat.IOSKeyId, &plat.IOSTeamId, &plat.IOSBundleId, &plat.IOSAuthTokenPath, &plat.MIAppSecret, &plat.MIRestrictedPackageName, &plat.MZAppId, &plat.MZAppSecret, &plat.OPPOAppKey, &plat.OPPOMasterSecret)
+		fmt.Println(channel + "platform param first in redis info")
+		query1 := "SELECT value FROM platform WHERE app_id = '" + "1" + "'" + "AND channel = '" + channel + "'"
+		err = mysqlClient.QueryRow(query1).Scan(&plat)
 		if err != nil {
 			fmt.Println("Platform 参数 查询数据库单条用户信息 出错：", err)
 			controllers.Response(c, common.HTTPError, "no platform parma", data)
 			return
 		}
-		// 遍历结构体，存入redis
-		t := reflect.TypeOf(plat)
-		v := reflect.ValueOf(plat)
-		for k := 0; k < t.NumField(); k++ {
-			redisClient.HSet(ctx, appIdKey, fmt.Sprint(t.Field(k).Name), fmt.Sprint(v.Field(k).Interface()))
+		if plat == "" {
+			controllers.Response(c, common.HTTPError, "platform parma is Empty", data)
+			return
+		}
+		// 遍历json，存入redis
+		var m map[string]string
+		_ = json.Unmarshal([]byte(plat), &m)
+		for k, v := range m {
+			redisClient.HSet(ctx, appIdKey, k, v)
 		}
 	} else {
 		fmt.Println("get platform param from redis", platRedis, reflect.TypeOf(platRedis))
-		// map 转 struct
-		if err = mapstructure.Decode(platRedis, &plat); err != nil {
-			fmt.Println(err)
-		}
+		// map 转 string
+		platStr, _ := json.Marshal(platRedis)
+		plat = string(platStr)
 	}
-
 	switch channel {
 	case "hw":
-		send.SetHWAppId(plat.HWAppId).SetHWClientSecret(plat.HWClientSecret)
+		send.SetHWParam(plat)
 		break
 	case "ios":
-		// 获取iOS-authtoken 不能频繁刷新，间隔时间为20分钟
-		iOSAuthTokenKey := "iOSAuthTokenKey:" + plat.IOSKeyId + plat.IOSTeamId
-		iOSAuthRedis, err := redisClient.Get(ctx, iOSAuthTokenKey).Result()
-		if err == redis.Nil || iOSAuthRedis == "" {
-			fmt.Println("ios-authToken first in redis info")
-			authToken, err := PushSDK.GetAuthTokenIOS(plat.IOSAuthTokenPath, plat.IOSKeyId, plat.IOSTeamId)
-			if err != nil {
-				fmt.Println(err)
-			}
-			redisClient.Set(ctx, iOSAuthTokenKey, authToken, 20*time.Minute)
-			send.SetIOSAuthToken(authToken)
-			plat.IOSAuthToken = authToken
-		} else {
-			send.SetIOSAuthToken(iOSAuthRedis)
-			plat.IOSAuthToken = iOSAuthRedis
-		}
-		send.SetIOSBundleId(plat.IOSBundleId)
+		send.SetIOSParam(plat)
 		break
 	case "mi":
-		send.SetMIAppSecret(plat.MIAppSecret).SetMIRestrictedPackageName(plat.MIRestrictedPackageName)
+		send.SetMIParam(plat)
 		break
 	case "mz":
-		send.SetMZAppId(plat.MZAppId).SetMZAppSecret(plat.MZAppSecret)
+		send.SetMZParam(plat)
 		break
 	case "oppo":
-		send.SetOPPOAppKey(plat.OPPOAppKey).SetOPPOMasterSecret(plat.OPPOMasterSecret)
+		send.SetOPPOParam(plat)
 		break
 	case "vivo":
-		// 获取vivo-authtoken 不能频繁刷新，间隔时间为60分钟
-		vAuthTokenKey := "vAuthTokenKey:" + plat.VIAppID + plat.VIAppKey
-		vAuthRedis, err := redisClient.Get(ctx, vAuthTokenKey).Result()
-		if err == redis.Nil || vAuthRedis == "" {
-			fmt.Println("v-authToken first in redis info")
-			vAuthToken := PushSDK.GetAuthTokenV(plat.VIAppID, plat.VIAppKey, plat.VIAppSecret)
-			if err != nil {
-				fmt.Println(err)
-			}
-			redisClient.Set(ctx, vAuthTokenKey, vAuthToken, 60*time.Minute)
-			send.SetVIAuthToken(vAuthToken)
-			plat.VIAuthToken = vAuthToken
-		} else {
-			send.SetVIAuthToken(vAuthRedis)
-			plat.VIAuthToken = vAuthRedis
-		}
+		send.SetVIVOParam(plat)
 		break
 	}
-
+	if send.Err != nil {
+		controllers.Response(c, common.HTTPError, send.Err.Error(), data)
+		return
+	}
 	// 发送消息
 	fmt.Println(send)
 	response, err := send.SendMessage()
