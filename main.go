@@ -4,6 +4,7 @@ import (
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
 	"InformationPush/routers"
+	"InformationPush/worker"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -23,6 +24,8 @@ func main() {
 	// 初始化路由
 	router := gin.Default()
 	routers.Init(router)
+
+	go work()
 
 	go open()
 
@@ -68,4 +71,9 @@ func open() {
 
 	cmd := exec.Command("open", httpUrl)
 	cmd.Output()
+}
+
+func work() {
+	taskWorker := worker.NewAsyncTaskWorker(0)
+	taskWorker.Launch()
 }

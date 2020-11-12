@@ -5,6 +5,7 @@ import (
 	"InformationPush/controllers"
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
+	"InformationPush/worker"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -29,6 +30,8 @@ type MessageParam struct {
 var ctx = context.Background()
 
 func Message(c *gin.Context) {
+	worker.AsyncTaskCenter.RegisterTasks(map[string]interface{}{"HelloWorldTask": worker.HelloWorld()})
+	return
 	// 定义接口返回data
 	data := make(map[string]interface{})
 	contentType := c.Request.Header.Get("Content-Type")
