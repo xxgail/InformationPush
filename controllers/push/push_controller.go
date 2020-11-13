@@ -30,15 +30,14 @@ type MessageParam struct {
 var ctx = context.Background()
 
 func Message(c *gin.Context) {
-	worker.AsyncTaskCenter.RegisterTasks(map[string]interface{}{"HelloWorldTask": worker.HelloWorld()})
-	return
+	var err error
 	// 定义接口返回data
 	data := make(map[string]interface{})
 	contentType := c.Request.Header.Get("Content-Type")
 	fmt.Println("Content-Type:", contentType)
 
 	var param MessageParam
-	var err error
+	//var err error
 
 	switch contentType {
 	case "application/json":
@@ -53,25 +52,8 @@ func Message(c *gin.Context) {
 	channel := c.Request.Header.Get("Channel")
 	appId := c.Request.Header.Get("AppId")
 	uid := param.Uid
-
-	// 消息体
-	send := PushSDK.NewSend()
-	send.SetChannel(channel)
-	send.SetTitle(param.Title).SetContent(param.Desc)
-
 	apns := common.SMD5(strconv.FormatInt(time.Now().Unix(), 10), "")
 	apnsId := apns[:8] + "-" + apns[8:12] + "-" + apns[12:16] + "-" + apns[16:20] + "-" + apns[20:]
-	send.SetApnsId(apnsId)
-
-	// 单个查询用户
-	//var DeviceToken string
-	//mysqlClient := mysqllib.GetMysqlConn()
-	//query := "SELECT device_token FROM device WHERE channel = '" + channel + "' AND uid = '" + uid + "' AND app_id = '" + appId + "'"
-	//fmt.Println(query)
-	//err = mysqlClient.QueryRow(query).Scan(&DeviceToken)
-	//if err != nil {
-	//	fmt.Println("PushMessage 查询数据库单条用户信息 出错：", err)
-	//}
 
 	// 多个查询，获取要推送的device_token
 	var pushIds []string
@@ -95,7 +77,6 @@ func Message(c *gin.Context) {
 		controllers.Response(c, common.HTTPError, "No pushId", data)
 		return
 	}
-	send.SetPushId(pushIds)
 
 	// 直接传入配置json
 	var plat string
@@ -129,40 +110,31 @@ func Message(c *gin.Context) {
 		platStr, _ := json.Marshal(platRedis)
 		plat = string(platStr)
 	}
-	switch channel {
-	case "hw":
-		send.SetHWParam(plat)
-		break
-	case "ios":
-		send.SetIOSParam(plat)
-		break
-	case "mi":
-		send.SetMIParam(plat)
-		break
-	case "mz":
-		send.SetMZParam(plat)
-		break
-	case "oppo":
-		send.SetOPPOParam(plat)
-		break
-	case "vivo":
-		send.SetVIVOParam(plat)
-		break
+
+	sendMap := map[string]string{
+		"channel": channel,
+		"title":   param.Title,
+		"content": param.Desc,
+		"pushId":  pushIds[0],
+		"plat":    plat,
+		"apnsId":  apnsId,
 	}
-	if send.Err != nil {
-		controllers.Response(c, common.HTTPError, send.Err.Error(), data)
-		return
+	sendStr, _ := json.Marshal(sendMap)
+	redisClient.SAdd(ctx, "SendMessage", string(sendStr))
+	//result := worker.Execute(string(sendStr))
+	response := &PushSDK.Response{
+		Code: 1,
 	}
-	// 发送消息
-	fmt.Println(send)
-	response, err := send.SendMessage()
-	if err != nil {
-		controllers.Response(c, common.HTTPError, "err!", data)
+	//_ = json.Unmarshal([]byte(result), &response)
+	if response.Code == PushSDK.SendSuccess {
+		controllers.Response(c, common.HTTPOK, "发送成功！", data)
 	} else {
-		if response.Code == PushSDK.SendSuccess {
-			controllers.Response(c, common.HTTPOK, "发送成功！", data)
-		} else {
-			controllers.Response(c, common.HTTPError, response.Reason, data)
-		}
+		controllers.Response(c, common.HTTPError, response.Reason, data)
 	}
+}
+
+func E(c *gin.Context) {
+	worker.Execute()
+	data := make(map[string]interface{})
+	controllers.Response(c, common.HTTPOK, "发送成功！", data)
 }

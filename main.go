@@ -4,7 +4,7 @@ import (
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
 	"InformationPush/routers"
-	"InformationPush/worker"
+	worker2 "InformationPush/worker"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -25,9 +25,8 @@ func main() {
 	router := gin.Default()
 	routers.Init(router)
 
-	go work()
-
 	go open()
+	go work()
 
 	httpPort := viper.GetString("app.httpPort")
 	http.ListenAndServe(":"+httpPort, router)
@@ -74,6 +73,5 @@ func open() {
 }
 
 func work() {
-	taskWorker := worker.NewAsyncTaskWorker(0)
-	taskWorker.Launch()
+	_ = worker2.NewAsyncTaskWorker()
 }

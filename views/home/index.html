@@ -14,6 +14,7 @@
     <option value = "mi">小米</option>
     <option value = "mz">魅族</option>
     <option value = "oppo">OPPO</option>
+    <option value="vivo">vivo</option>
 </select>
 <br>
 <label>device_token</label>
@@ -48,6 +49,7 @@
 <br>
 <br>
 <button style="color: blue" name="push">发送</button>
+<button style="color: blue" name="execute">execute</button>
 <br>
 
 <hr>
@@ -214,6 +216,27 @@ $(function(){
                 console.log(data);
                 if (data.code == 1){
                     $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + "发送成功！</p>")
+                    // addChatWith(msg("小盖","出价啦"))
+                }else {
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + data.msg +"</p>")
+                }
+            }
+        });
+    });
+
+    $("button[name='execute']").click(function() {
+        console.log("execute")
+        var now = new Date();
+        $.ajax({
+            type: "POST",
+            url: 'http://{{ .httpUrl }}/push/e',
+            data: {
+            },
+            contentType: "application/x-www-form-urlencoded",
+            success: function(data) {
+                console.log(data);
+                if (data.code == 1){
+                    $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + "123成功！</p>")
                     // addChatWith(msg("小盖","出价啦"))
                 }else {
                     $("div.time").append("<p style='color: green'><small style='color: red' class='time'>"+now.toLocaleString()+"</small>   " + data.msg +"</p>")
