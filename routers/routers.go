@@ -26,6 +26,5 @@ func Init(router *gin.Engine) {
 	pushRouter := router.Group("/push")
 	{
 		pushRouter.POST("/message", push.Message)
-		pushRouter.POST("/e", push.E)
 	}
 }

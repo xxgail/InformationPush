@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"reflect"
+)
+
 //var (
 //	app *cli.App
 //)
@@ -203,3 +208,14 @@ package main
 //
 //	return nil
 //}
+
+func main() {
+	m := make(map[string]interface{})
+	m["title"] = "标题"
+	m["content"] = "content"
+	m["pushId"] = []string{"aaa"}
+	for _, v := range m {
+		fmt.Println(v)
+		fmt.Println(reflect.TypeOf(v))
+	}
+}

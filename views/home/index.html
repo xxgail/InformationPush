@@ -41,11 +41,14 @@
 <button style="color: red" name="logout">退出登录</button>
 
 <h1>消息</h1>
-<label>Title</label>
-<input type="text" class="message_title" value="测试title">
+<label>标题</label>
+<input type="textarea" class="message_title" value="">
 <br>
-<label>Body</label>
-<input type="text" class="message_body" value="测试Body">
+<label>详情</label>
+<input type="textarea" class="message_body" value="">
+<br>
+<label>延迟时间</label>
+<input type="text" class="send_time" value="0">
 <br>
 <br>
 <button style="color: blue" name="push">发送</button>
@@ -66,6 +69,10 @@
 <script src="http://91vh.com/js/jquery-2.1.4.min.js"></script>
 <script>
 $(function(){
+    var currentTime = new Date()
+    $(".message_title").val(currentTime)
+    $(".message_body").val(currentTime)
+
     $('.channel').click(function (){
         var c = $('.channel').val();
         $.ajax({
@@ -205,6 +212,7 @@ $(function(){
                 uid : uid,
                 title : $('.message_title').val(),
                 desc : $('.message_body').val(),
+                send_time : $('.send_time').val(),
                 is_show_notify : 1,
             },
             beforeSend: function(request) {

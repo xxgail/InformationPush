@@ -5,16 +5,15 @@ import (
 	"InformationPush/controllers"
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
-	"InformationPush/worker"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/techoner/gophp/serialize"
 	"github.com/xxgail/PushSDK"
 	"reflect"
-	"strconv"
-	"time"
+	"strings"
 )
 
 type MessageParam struct {
@@ -25,6 +24,7 @@ type MessageParam struct {
 	Icon         string `form:"icon" json:"icon"`
 	Type         int    `form:"type" json:"type"`
 	IsShowNotify int    `form:"is_show_notify" json:"is_show_notify"`
+	SendTime     string `form:"send_time" json:"send_time"`
 }
 
 var ctx = context.Background()
@@ -52,8 +52,6 @@ func Message(c *gin.Context) {
 	channel := c.Request.Header.Get("Channel")
 	appId := c.Request.Header.Get("AppId")
 	uid := param.Uid
-	apns := common.SMD5(strconv.FormatInt(time.Now().Unix(), 10), "")
-	apnsId := apns[:8] + "-" + apns[8:12] + "-" + apns[12:16] + "-" + apns[16:20] + "-" + apns[20:]
 
 	// 多个查询，获取要推送的device_token
 	var pushIds []string
@@ -112,18 +110,19 @@ func Message(c *gin.Context) {
 	}
 
 	sendMap := map[string]string{
-		"channel": channel,
-		"title":   param.Title,
-		"content": param.Desc,
-		"pushId":  pushIds[0],
-		"plat":    plat,
-		"apnsId":  apnsId,
+		"channel":   channel,
+		"title":     param.Title,
+		"content":   param.Desc,
+		"pushId":    strings.Join(pushIds, ","),
+		"plat":      plat,
+		"send_time": param.SendTime,
 	}
-	sendStr, _ := json.Marshal(sendMap)
-	redisClient.SAdd(ctx, "SendMessage", string(sendStr))
+	sendStr, _ := serialize.Marshal(sendMap)
+	res, _ := redisClient.RPush(ctx, "SendMessage", string(sendStr)).Result()
+	fmt.Println("存入redis", res)
 	//result := worker.Execute(string(sendStr))
 	response := &PushSDK.Response{
-		Code: 1,
+		Code: 0,
 	}
 	//_ = json.Unmarshal([]byte(result), &response)
 	if response.Code == PushSDK.SendSuccess {
@@ -131,10 +130,4 @@ func Message(c *gin.Context) {
 	} else {
 		controllers.Response(c, common.HTTPError, response.Reason, data)
 	}
-}
-
-func E(c *gin.Context) {
-	worker.Execute()
-	data := make(map[string]interface{})
-	controllers.Response(c, common.HTTPOK, "发送成功！", data)
 }

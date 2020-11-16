@@ -4,6 +4,7 @@ import (
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
 	"InformationPush/routers"
+	"InformationPush/timer/task"
 	worker2 "InformationPush/worker"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,8 @@ func main() {
 	// 初始化路由
 	router := gin.Default()
 	routers.Init(router)
+
+	task.PushTaskInit()
 
 	go open()
 	go work()

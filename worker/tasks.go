@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"InformationPush/common"
 	"encoding/json"
 	"fmt"
 	"github.com/RichardKnop/machinery/v1/log"
 	"github.com/xxgail/PushSDK"
+	"strings"
 	"time"
 )
 
@@ -25,17 +27,13 @@ func LongRunningTask() error {
 	return nil
 }
 
-func SendMessage(s string) (string, error) {
+func SendMessage(title string, content string, channel string, pushId string, plat string) (string, error) {
 	fmt.Println("我执行到这里了！！！！！！！！！")
-	m := make(map[string]string)
-	_ = json.Unmarshal([]byte(s), &m)
-	fmt.Println("mmmmmmmmmmmm", m)
 	send := PushSDK.NewSend()
-	send.SetTitle(m["title"]).SetContent(m["content"]).SetApnsId(m["apnsId"])
-	send.SetPushId([]string{m["pushId"]})
-	send.SetChannel(m["channel"])
-	plat := m["plat"]
-	switch m["channel"] {
+	send.SetTitle(title).SetContent(content).SetApnsId(common.GetRandomApnsId())
+	send.SetPushId(strings.Split(pushId, ","))
+	send.SetChannel(channel)
+	switch channel {
 	case "hw":
 		send.SetHWParam(plat)
 		break
