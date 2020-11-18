@@ -27,19 +27,19 @@ type MessageTaskStruct struct {
 func SendMessageTask(str string) (string, error) {
 	fmt.Println("我执行到这里了！！！！！！！！！")
 
-	var m map[string]string
+	var m MessageTaskStruct
 	_ = json.Unmarshal([]byte(str), &m)
 
 	message := PushSDK.NewMessage()
-	message.SetTitle(m["title"]).SetContent(m["content"]).SetApnsId(common.GetRandomApnsId())
+	message.SetTitle(m.Title).SetContent(m.Content).SetApnsId(common.GetRandomApnsId())
 	if message.Err != nil {
 		return "", message.Err
 	}
 
 	send := PushSDK.NewSend()
-	send.SetPushId(strings.Split(m["pushId"], ","))
-	send.SetChannel(m["channel"])
-	send.SetPlatForm(m["plat"])
+	send.SetPushId(strings.Split(m.PushId, ","))
+	send.SetChannel(m.Channel)
+	send.SetPlatForm(m.Plat)
 
 	if send.Err != nil {
 		return "", send.Err

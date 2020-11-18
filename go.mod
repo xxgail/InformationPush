@@ -11,5 +11,5 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/spf13/viper v1.7.1
 	github.com/techoner/gophp v0.2.0
-	github.com/xxgail/PushSDK v0.0.0-20201118030030-d07967010035
+	github.com/xxgail/PushSDK v0.0.0-20201118083920-0a5ae4dfe4f5
 )
