@@ -24,5 +24,5 @@ func GetRandomApnsId() string {
 
 func GetFileLineNum() string {
 	_, file, line, _ := runtime.Caller(1)
-	return "▶ 我走到这里啦！" + file + "--line" + strconv.Itoa(line)
+	return time.Now().Format("2006-01-02 15:04:05") + "▶ 我走到这里啦！" + file + "--line" + strconv.Itoa(line)
 }

@@ -2,41 +2,24 @@ package worker
 
 import (
 	"InformationPush/common"
-	"context"
 	"fmt"
-	"github.com/RichardKnop/machinery/example/tracers"
-	"github.com/RichardKnop/machinery/v1/log"
 	"github.com/RichardKnop/machinery/v1/tasks"
-	"github.com/google/uuid"
-	"github.com/opentracing/opentracing-go"
-	opentracing_log "github.com/opentracing/opentracing-go/log"
 	"reflect"
+	"strconv"
 	"time"
 )
 
-func PushJob(param map[string]interface{}, retryCount int, delayTime int64) string {
-	cleanup, err := tracers.SetupTracer("TestWorker")
-	if err != nil {
-		log.FATAL.Fatalln("Unable to instantiate a tracer:", err)
-	}
-	defer cleanup()
-
-	server, err := startServer()
-	if err != nil {
-
-	}
-
+func PushJob(param map[string]interface{}, retryCount int, delayTime int64) {
 	var args []tasks.Arg
 	var arg tasks.Arg
-	for k, v := range param {
+	for _, v := range param {
 		arg = tasks.Arg{
-			Name:  k,
 			Type:  reflect.TypeOf(v).Name(),
 			Value: v,
 		}
 		args = append(args, arg)
 	}
-	signature := workTaskInit("sendMessage", args)
+	signature := workTaskInit(sendMessage, args)
 
 	fmt.Println(common.GetFileLineNum())
 
@@ -45,33 +28,33 @@ func PushJob(param map[string]interface{}, retryCount int, delayTime int64) stri
 	eta := time.Now().UTC().Add(time.Second * time.Duration(delayTime))
 	signature.ETA = &eta
 
-	fmt.Println(common.GetFileLineNum())
-	span, ctx := opentracing.StartSpanFromContext(context.Background(), "send")
-	defer span.Finish()
+	singleTask(signature)
+}
 
-	batchID := uuid.New().String()
-	span.SetBaggageItem("batch.id", batchID)
-	span.LogFields(opentracing_log.String("batch.id", batchID))
+type PushJobParam struct {
+	SendMessageParam string `json:"send_message_param"`
+	DelayTime        string `json:"delay_time"`
+}
 
-	log.INFO.Println("Starting batch:", batchID)
-	/*
-	 * First, let's try sending a single task
-	 */
+func PushJobGroup(params []PushJobParam, retryCount int) {
+	var signatures []*tasks.Signature
+	for _, param := range params {
+		var args []tasks.Arg
+		args = []tasks.Arg{
+			{
+				Type:  "string",
+				Value: param.SendMessageParam,
+			},
+		}
+		signature := workTaskInit(sendMessage, args)
+		signature.RetryCount = retryCount
 
-	log.INFO.Println("Single task:")
+		delayTime := param.DelayTime
+		delayTimeInt64, _ := strconv.ParseInt(delayTime, 10, 64)
+		eta := time.Now().UTC().Add(time.Second * time.Duration(delayTimeInt64))
+		signature.ETA = &eta
 
-	asyncResult, err := server.SendTaskWithContext(ctx, &signature)
-	if err != nil {
-		fmt.Errorf("Could not send task: %s", err.Error())
+		signatures = append(signatures, signature)
 	}
-
-	results, err := asyncResult.Get(time.Duration(time.Millisecond * 5))
-	if err != nil {
-		fmt.Errorf("Getting task result failed with error: %s", err.Error())
-	}
-	log.INFO.Printf(tasks.HumanReadableResults(results))
-
-	// 发送消息
-	result := tasks.HumanReadableResults(results)
-	return result
+	groupTask(signatures)
 }

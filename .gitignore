@@ -19,3 +19,4 @@
 ./config/iosP8
 .idea
 ./views/js/index.js
+./log/gin.log

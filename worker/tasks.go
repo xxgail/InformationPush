@@ -7,57 +7,45 @@ import (
 	"github.com/RichardKnop/machinery/v1/log"
 	"github.com/xxgail/PushSDK"
 	"strings"
-	"time"
 )
 
 // 定义task
-func SayHello(str string) (string, error) {
-	fmt.Println("Helloooo", str)
-	log.INFO.Println("Helloooo", str)
-	return "Helloooo" + str, nil
+func SayHelloTask(str string) (string, error) {
+	fmt.Println("Hello", str)
+	log.INFO.Println("Hello", str)
+	return "Hello" + str, nil
 }
 
-func LongRunningTask() error {
-	log.INFO.Print("Long running tasks started")
-	for i := 0; i < 10; i++ {
-		log.INFO.Print(10 - i)
-		time.Sleep(1 * time.Second)
-	}
-	log.INFO.Print("Long running tasks finished")
-	return nil
+type MessageTaskStruct struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Channel string `json:"channel"`
+	PushId  string `json:"pushId"`
+	Plat    string `json:"plat"`
 }
 
-func SendMessage(title string, content string, channel string, pushId string, plat string) (string, error) {
+func SendMessageTask(str string) (string, error) {
 	fmt.Println("我执行到这里了！！！！！！！！！")
-	send := PushSDK.NewSend()
-	send.SetTitle(title).SetContent(content).SetApnsId(common.GetRandomApnsId())
-	send.SetPushId(strings.Split(pushId, ","))
-	send.SetChannel(channel)
-	switch channel {
-	case "hw":
-		send.SetHWParam(plat)
-		break
-	case "ios":
-		send.SetIOSParam(plat)
-		break
-	case "mi":
-		send.SetMIParam(plat)
-		break
-	case "mz":
-		send.SetMZParam(plat)
-		break
-	case "oppo":
-		send.SetOPPOParam(plat)
-		break
-	case "vivo":
-		send.SetVIVOParam(plat)
-		break
+
+	var m map[string]string
+	_ = json.Unmarshal([]byte(str), &m)
+
+	message := PushSDK.NewMessage()
+	message.SetTitle(m["title"]).SetContent(m["content"]).SetApnsId(common.GetRandomApnsId())
+	if message.Err != nil {
+		return "", message.Err
 	}
+
+	send := PushSDK.NewSend()
+	send.SetPushId(strings.Split(m["pushId"], ","))
+	send.SetChannel(m["channel"])
+	send.SetPlatForm(m["plat"])
+
 	if send.Err != nil {
 		return "", send.Err
 	}
-	response, err := send.SendMessage()
+	response, err := send.SendMessage(message)
+
 	responseStr, _ := json.Marshal(response)
-	fmt.Println(string(responseStr))
 	return string(responseStr), err
 }

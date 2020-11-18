@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"InformationPush/common"
 	"context"
 	"fmt"
 	"github.com/RichardKnop/machinery/example/tracers"
@@ -19,9 +20,13 @@ var (
 	AsyncTaskMap    map[string]interface{}
 )
 
+var (
+	sendMessage = "sendMessage"
+)
+
 func initAsyncTaskMap() {
 	AsyncTaskMap = make(map[string]interface{})
-	AsyncTaskMap["sendMessage"] = SendMessage
+	AsyncTaskMap[sendMessage] = SendMessageTask
 }
 
 func startServer() (*machinery.Server, error) {
@@ -51,7 +56,7 @@ func NewAsyncTaskWorker() error {
 	if err != nil {
 	}
 
-	worker := AsyncTaskCenter.NewWorker(consumerTag, 0)
+	worker := AsyncTaskCenter.NewWorker(consumerTag, 10)
 	errorhandler := func(err error) {
 		log.ERROR.Println("I am an error handler:", err)
 	}
@@ -69,59 +74,16 @@ func NewAsyncTaskWorker() error {
 	return worker.Launch()
 }
 
-func SendTest() error {
-	cleanup, err := tracers.SetupTracer("sender")
-	if err != nil {
-		log.FATAL.Fatalln("Unable to instantiate a tracer:", err)
+// task init
+func workTaskInit(name string, args []tasks.Arg) *tasks.Signature {
+	return &tasks.Signature{
+		Name: name,
+		Args: args,
 	}
-	defer cleanup()
+}
 
-	server, err := startServer()
-	if err != nil {
-		return err
-	}
-
-	var (
-		SayOne, SayTwo, SayThree tasks.Signature
-		longRunningTask          tasks.Signature
-	)
-
-	var initTasks = func() {
-		SayOne = tasks.Signature{
-			Name: "sayHello",
-			Args: []tasks.Arg{
-				{
-					Type:  "string",
-					Value: "One111111",
-				},
-			},
-		}
-
-		SayTwo = tasks.Signature{
-			Name: "sayHello",
-			Args: []tasks.Arg{
-				{
-					Type:  "string",
-					Value: "Two222222",
-				},
-			},
-		}
-
-		SayThree = tasks.Signature{
-			Name: "sayHello",
-			Args: []tasks.Arg{
-				{
-					Type:  "string",
-					Value: "Three333333",
-				},
-			},
-		}
-
-		longRunningTask = tasks.Signature{
-			Name: "longTask",
-		}
-	}
-
+// single task
+func singleTask(signature *tasks.Signature) {
 	span, ctx := opentracing.StartSpanFromContext(context.Background(), "send")
 	defer span.Finish()
 
@@ -133,39 +95,49 @@ func SendTest() error {
 	/*
 	 * First, let's try sending a single task
 	 */
-	initTasks()
-
 	log.INFO.Println("Single task:")
 
-	asyncResult, err := server.SendTaskWithContext(ctx, &SayOne)
+	asyncResult, err := AsyncTaskCenter.SendTaskWithContext(ctx, signature)
 	if err != nil {
-		return fmt.Errorf("Could not send task: %s", err.Error())
+		fmt.Errorf("Could not send task: %s", err.Error())
 	}
+	asyncResult.GetState().IsSuccess()
 
 	results, err := asyncResult.Get(time.Duration(time.Millisecond * 5))
 	if err != nil {
-		return fmt.Errorf("Getting task result failed with error: %s", err.Error())
+		fmt.Errorf("Getting task result failed with error: %s", err.Error())
 	}
-	log.INFO.Printf("1 + 1 = %v\n", tasks.HumanReadableResults(results))
-
-	//initTasks()
-	//asyncResult, err = server.SendTaskWithContext(ctx, &longRunningTask)
-	//if err != nil {
-	//	return fmt.Errorf("Could not send task: %s", err.Error())
-	//}
-	//
-	//results, err = asyncResult.Get(time.Duration(time.Millisecond * 5))
-	//if err != nil {
-	//	return fmt.Errorf("Getting long running task result failed with error: %s", err.Error())
-	//}
-	//log.INFO.Printf("Long running task returned = %v\n", tasks.HumanReadableResults(results))
-
-	return nil
+	log.INFO.Printf(tasks.HumanReadableResults(results))
 }
 
-func workTaskInit(name string, args []tasks.Arg) tasks.Signature {
-	return tasks.Signature{
-		Name: name,
-		Args: args,
+// group task
+func groupTask(signatures []*tasks.Signature) {
+	fmt.Println(common.GetFileLineNum())
+	span, ctx := opentracing.StartSpanFromContext(context.Background(), "PushJobGroup")
+	defer span.Finish()
+
+	batchID := uuid.New().String()
+	span.SetBaggageItem("batch.id", batchID)
+	span.LogFields(opentracing_log.String("batch.id", batchID))
+
+	log.INFO.Println("Group of tasks (parallel execution):")
+
+	group, err := tasks.NewGroup(signatures...)
+	if err != nil {
+		fmt.Errorf("Error creating group: %s", err.Error())
+	}
+
+	asyncResults, err := AsyncTaskCenter.SendGroupWithContext(ctx, group, 10)
+	if err != nil {
+		fmt.Errorf("Could not send group: %s", err.Error())
+	}
+
+	for _, asyncResult := range asyncResults {
+		results, err := asyncResult.Get(time.Duration(time.Millisecond * 5))
+		if err != nil {
+			fmt.Errorf("Getting task result failed with error: %s", err.Error())
+		}
+		common.GetFileLineNum()
+		log.INFO.Printf("%v\n", tasks.HumanReadableResults(results))
 	}
 }

@@ -5,13 +5,11 @@ import (
 	"InformationPush/controllers"
 	"InformationPush/lib/mysqllib"
 	"InformationPush/lib/redislib"
-	"context"
+	"InformationPush/worker"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/techoner/gophp/serialize"
-	"github.com/xxgail/PushSDK"
 	"reflect"
 	"strings"
 )
@@ -27,17 +25,14 @@ type MessageParam struct {
 	SendTime     string `form:"send_time" json:"send_time"`
 }
 
-var ctx = context.Background()
-
 func Message(c *gin.Context) {
-	var err error
 	// 定义接口返回data
 	data := make(map[string]interface{})
 	contentType := c.Request.Header.Get("Content-Type")
 	fmt.Println("Content-Type:", contentType)
 
 	var param MessageParam
-	//var err error
+	var err error
 
 	switch contentType {
 	case "application/json":
@@ -80,7 +75,7 @@ func Message(c *gin.Context) {
 	var plat string
 	appIdKey := "AppIdKey:" + channel + ":" + common.SMD5("AppId", appId)
 	redisClient := redislib.GetClient()
-	platRedis, err := redisClient.HGetAll(ctx, appIdKey).Result()
+	platRedis, err := redisClient.HGetAll(common.Ctx, appIdKey).Result()
 	if err != nil {
 		fmt.Println("err", err)
 	} else if len(platRedis) == 0 {
@@ -100,7 +95,7 @@ func Message(c *gin.Context) {
 		var m map[string]string
 		_ = json.Unmarshal([]byte(plat), &m)
 		for k, v := range m {
-			redisClient.HSet(ctx, appIdKey, k, v)
+			redisClient.HSet(common.Ctx, appIdKey, k, v)
 		}
 	} else {
 		fmt.Println("get platform param from redis", platRedis, reflect.TypeOf(platRedis))
@@ -109,25 +104,21 @@ func Message(c *gin.Context) {
 		plat = string(platStr)
 	}
 
-	sendMap := map[string]string{
-		"channel":   channel,
-		"title":     param.Title,
-		"content":   param.Desc,
-		"pushId":    strings.Join(pushIds, ","),
-		"plat":      plat,
-		"send_time": param.SendTime,
+	messageTask := worker.MessageTaskStruct{
+		Title:   param.Title,
+		Content: param.Desc,
+		PushId:  strings.Join(pushIds, ","),
+		Channel: channel,
+		Plat:    plat,
 	}
-	sendStr, _ := serialize.Marshal(sendMap)
-	res, _ := redisClient.RPush(ctx, "SendMessage", string(sendStr)).Result()
+	messageTaskStr, _ := json.Marshal(messageTask)
+	pushJobParam := worker.PushJobParam{
+		SendMessageParam: string(messageTaskStr),
+		DelayTime:        param.SendTime,
+	}
+	sendStr, _ := json.Marshal(pushJobParam)
+	res, _ := redisClient.RPush(common.Ctx, "SendMessage", string(sendStr)).Result()
 	fmt.Println("存入redis", res)
-	//result := worker.Execute(string(sendStr))
-	response := &PushSDK.Response{
-		Code: 0,
-	}
-	//_ = json.Unmarshal([]byte(result), &response)
-	if response.Code == PushSDK.SendSuccess {
-		controllers.Response(c, common.HTTPOK, "发送成功！", data)
-	} else {
-		controllers.Response(c, common.HTTPError, response.Reason, data)
-	}
+
+	controllers.Response(c, common.HTTPOK, "发送成功！", data)
 }
