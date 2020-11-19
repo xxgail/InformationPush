@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,4 +26,21 @@ func GetRandomApnsId() string {
 func GetFileLineNum() string {
 	_, file, line, _ := runtime.Caller(1)
 	return time.Now().Format("2006-01-02 15:04:05") + "▶ 我走到这里啦！" + file + "--line" + strconv.Itoa(line)
+}
+
+func ToSqlStr(i interface{}, seq string) string {
+	var arr []string
+	switch v := i.(type) {
+	case string:
+		arr = strings.Split(v, seq)
+		break
+	default:
+		arr = v.([]string)
+	}
+	var res string
+	res = "'" + arr[0] + "'"
+	for i := 1; i < len(arr); i++ {
+		res += "," + "'" + arr[i] + "'"
+	}
+	return res
 }

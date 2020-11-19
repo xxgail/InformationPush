@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"reflect"
-	"strings"
 )
 
 type MessageParam struct {
@@ -44,81 +43,89 @@ func Message(c *gin.Context) {
 		fmt.Println(err)
 	}
 
-	channel := c.Request.Header.Get("Channel")
 	appId := c.Request.Header.Get("AppId")
 	uid := param.Uid
+	uidStr := common.ToSqlStr(uid, ",")
 
-	// 多个查询，获取要推送的device_token
-	var pushIds []string
 	mysqlClient := mysqllib.GetMysqlConn()
-	query := "SELECT device_token FROM device WHERE channel = '" + channel + "' AND uid = '" + uid + "' AND app_id = '" + appId + "'"
+	query := "SELECT device_token, channel FROM device WHERE app_id = '" + appId + "' AND uid IN (" + uidStr + ")" + " LIMIT 0, 1000"
+	fmt.Println(query)
 	rows, err := mysqlClient.Query(query)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer rows.Close()
+
+	pushMap := map[string]string{}
 	for rows.Next() {
 		var pushId string
-		if err := rows.Scan(&pushId); err != nil {
+		var pushChannel string
+		if err := rows.Scan(&pushId, &pushChannel); err != nil {
 			fmt.Println(err)
 			return
 		}
-		pushIds = append(pushIds, pushId)
+		if _, ok := pushMap[pushChannel]; ok {
+			pushMap[pushChannel] = pushMap[pushChannel] + "," + pushId
+		} else {
+			pushMap[pushChannel] = pushId
+		}
 	}
-	if len(pushIds) == 0 {
+
+	if len(pushMap) == 0 {
 		controllers.Response(c, common.HTTPError, "No pushId", data)
 		return
 	}
 
-	// 直接传入配置json
-	var plat string
-	appIdKey := "AppIdKey:" + channel + ":" + common.SMD5("AppId", appId)
-	redisClient := redislib.GetClient()
-	platRedis, err := redisClient.HGetAll(common.Ctx, appIdKey).Result()
-	if err != nil {
-		fmt.Println("err", err)
-	} else if len(platRedis) == 0 {
-		fmt.Println(channel + "platform param first in redis info")
-		query1 := "SELECT value FROM platform WHERE app_id = '" + "1" + "'" + "AND channel = '" + channel + "'"
-		err = mysqlClient.QueryRow(query1).Scan(&plat)
+	for k, v := range pushMap {
+		var plat string
+		appIdKey := "AppIdKey:" + k + ":" + common.SMD5("AppId", appId)
+		redisClient := redislib.GetClient()
+		platRedis, err := redisClient.HGetAll(common.Ctx, appIdKey).Result()
 		if err != nil {
-			fmt.Println("Platform 参数 查询数据库单条用户信息 出错：", err)
-			controllers.Response(c, common.HTTPError, "no platform parma", data)
-			return
+			fmt.Println("err", err)
+		} else if len(platRedis) == 0 {
+			fmt.Println(k + "platform param first in redis info")
+			query1 := "SELECT value FROM platform WHERE app_id = '" + "1" + "'" + "AND channel = '" + k + "'"
+			err = mysqlClient.QueryRow(query1).Scan(&plat)
+			if err != nil {
+				fmt.Println("Platform 参数 查询数据库单条用户信息 出错：", err)
+				controllers.Response(c, common.HTTPError, "no platform parma", data)
+				return
+			}
+			if plat == "" {
+				controllers.Response(c, common.HTTPError, "platform parma is Empty", data)
+				return
+			}
+			// 遍历json，存入redis
+			var m map[string]string
+			_ = json.Unmarshal([]byte(plat), &m)
+			for k, v := range m {
+				redisClient.HSet(common.Ctx, appIdKey, k, v)
+			}
+		} else {
+			fmt.Println("get platform param from redis", platRedis, reflect.TypeOf(platRedis))
+			// map 转 string
+			platStr, _ := json.Marshal(platRedis)
+			plat = string(platStr)
 		}
-		if plat == "" {
-			controllers.Response(c, common.HTTPError, "platform parma is Empty", data)
-			return
-		}
-		// 遍历json，存入redis
-		var m map[string]string
-		_ = json.Unmarshal([]byte(plat), &m)
-		for k, v := range m {
-			redisClient.HSet(common.Ctx, appIdKey, k, v)
-		}
-	} else {
-		fmt.Println("get platform param from redis", platRedis, reflect.TypeOf(platRedis))
-		// map 转 string
-		platStr, _ := json.Marshal(platRedis)
-		plat = string(platStr)
-	}
 
-	messageTask := worker.MessageTaskStruct{
-		Title:   param.Title,
-		Content: param.Desc,
-		PushId:  strings.Join(pushIds, ","),
-		Channel: channel,
-		Plat:    plat,
+		messageTask := worker.MessageTaskStruct{
+			Title:   param.Title,
+			Content: param.Desc,
+			PushId:  v,
+			Channel: k,
+			Plat:    plat,
+		}
+		messageTaskStr, _ := json.Marshal(messageTask)
+		pushJobParam := worker.PushJobParam{
+			SendMessageParam: string(messageTaskStr),
+			DelayTime:        param.SendTime,
+		}
+		sendStr, _ := json.Marshal(pushJobParam)
+		res, _ := redisClient.RPush(common.Ctx, "SendMessage", string(sendStr)).Result()
+		fmt.Println("存入redis", res)
 	}
-	messageTaskStr, _ := json.Marshal(messageTask)
-	pushJobParam := worker.PushJobParam{
-		SendMessageParam: string(messageTaskStr),
-		DelayTime:        param.SendTime,
-	}
-	sendStr, _ := json.Marshal(pushJobParam)
-	res, _ := redisClient.RPush(common.Ctx, "SendMessage", string(sendStr)).Result()
-	fmt.Println("存入redis", res)
 
 	controllers.Response(c, common.HTTPOK, "发送成功！", data)
 }
