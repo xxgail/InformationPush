@@ -4,6 +4,7 @@ import (
 	"InformationPush/controllers/device"
 	"InformationPush/controllers/home"
 	"InformationPush/controllers/push"
+	"InformationPush/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,7 +24,7 @@ func Init(router *gin.Engine) {
 		homeRouter.GET("/getAppId/:channel", home.GetAppId)
 	}
 
-	pushRouter := router.Group("/push")
+	pushRouter := router.Group("/push").Use(middleware.TokenCheck()) // middleware example
 	{
 		pushRouter.POST("/message", push.Message)
 	}

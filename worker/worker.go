@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/opentracing/opentracing-go"
 	opentracing_log "github.com/opentracing/opentracing-go/log"
+	"github.com/spf13/viper"
 	"time"
 )
 
@@ -31,9 +32,9 @@ func initAsyncTaskMap() {
 
 func startServer() (*machinery.Server, error) {
 	cnf := &mchConf.Config{
-		Broker:        "redis://127.0.0.1:6379",
+		Broker:        "redis://" + viper.GetString("redis.password") + "@" + viper.GetString("redis.addr"),
 		DefaultQueue:  "ServerTasksQueue",
-		ResultBackend: "redis://127.0.0.1:6379",
+		ResultBackend: "redis://" + viper.GetString("redis.password") + "@" + viper.GetString("redis.addr"),
 	}
 
 	server, _ := machinery.NewServer(cnf)

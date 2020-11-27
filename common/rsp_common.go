@@ -3,7 +3,7 @@ package common
 type JsonResult struct {
 	Code uint32      `json:"code"`
 	Msg  string      `json:"msg"`
-	Data interface{} `json:"data"`
+	Data interface{} `json:"data,omitempty"`
 }
 
 // 定义错误返回

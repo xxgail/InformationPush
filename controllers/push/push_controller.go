@@ -86,7 +86,7 @@ func Message(c *gin.Context) {
 			fmt.Println("err", err)
 		} else if len(platRedis) == 0 {
 			fmt.Println(k + "platform param first in redis info")
-			query1 := "SELECT value FROM platform WHERE app_id = '" + "1" + "'" + "AND channel = '" + k + "'"
+			query1 := "SELECT value FROM platform WHERE app_id = '" + appId + "'" + "AND channel = '" + k + "'"
 			err = mysqlClient.QueryRow(query1).Scan(&plat)
 			if err != nil {
 				fmt.Println("Platform 参数 查询数据库单条用户信息 出错：", err)
